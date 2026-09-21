@@ -1,0 +1,202 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  role          String    @default("CUSTOMER") // CUSTOMER, LAWYER, ADMIN
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  cases         Case[]    @relation("CustomerCases")
+  assignedCases Case[]    @relation("LawyerCases")
+  lawyerReviews LawyerReview[] @relation("LawyerReviews")
+  auditLogs     AuditLog[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Case {
+  id            String    @id @default(cuid())
+  customerId    String
+  customer      User      @relation("CustomerCases", fields: [customerId], references: [id], onDelete: Cascade)
+  lawyerId      String?
+  lawyer        User?     @relation("LawyerCases", fields: [lawyerId], references: [id])
+  
+  status        String    @default("DRAFT") // DRAFT, PAID, IN_REVIEW, CLARIFICATION_REQUESTED, REVISION_REQUIRED, APPROVED, DELIVERED
+  flags         String?   // Comma-separated list of flags: STANDARD, GUARDIAN_REQUIRED, NRI, FOREIGN_ASSETS, BUSINESS_INTEREST, COMPLEX_FAMILY, EXISTING_WILL, LEGAL_REVIEW_REQUIRED, MANUAL_CONSULTATION_REQUIRED
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  answers       QuestionnaireAnswer[]
+  documents     Document[]
+  reviews       LawyerReview[]
+  payments      Payment[]
+  auditLogs     AuditLog[]
+
+  @@index([customerId])
+  @@index([lawyerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model QuestionnaireAnswer {
+  id                  String   @id @default(cuid())
+  caseId              String
+  case                Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  questionnaireVersion String  // E.g., "v1.0"
+  questionId          String
+  sectionId           String?
+  answerData          String   // JSON payload of the answer
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([caseId, questionId])
+  @@index([caseId])
+  @@index([sectionId])
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      String   @default("DRAFT") // DRAFT, UNDER_REVIEW, LAWYER_APPROVED, LOCKED, ARCHIVED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  versions    TemplateVersion[]
+}
+
+model TemplateVersion {
+  id          String   @id @default(cuid())
+  templateId  String
+  template    Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  version     Int
+  content     String   // The text/structure of the template
+  status      String   @default("DRAFT") // DRAFT, UNDER_REVIEW, LAWYER_APPROVED, LOCKED, ARCHIVED
+  createdAt   DateTime @default(now())
+
+  documents   Document[]
+
+  @@unique([templateId, version])
+  @@index([templateId])
+}
+
+model Clause {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      String   @default("DRAFT") // DRAFT, UNDER_REVIEW, LAWYER_APPROVED, LOCKED, ARCHIVED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  versions    ClauseVersion[]
+}
+
+model ClauseVersion {
+  id          String   @id @default(cuid())
+  clauseId    String
+  clause      Clause   @relation(fields: [clauseId], references: [id], onDelete: Cascade)
+  version     Int
+  content     String
+  status      String   @default("DRAFT") // DRAFT, UNDER_REVIEW, LAWYER_APPROVED, LOCKED, ARCHIVED
+  createdAt   DateTime @default(now())
+
+  @@unique([clauseId, version])
+  @@index([clauseId])
+}
+
+model Rule {
+  id          String   @id @default(cuid())
+  name        String
+  condition   String   // JSON or expression string
+  action      String   // JSON or expression string
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Document {
+  id                String   @id @default(cuid())
+  caseId            String
+  case              Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  templateVersionId String
+  templateVersion   TemplateVersion @relation(fields: [templateVersionId], references: [id])
+  
+  status            String   @default("DRAFT") // DRAFT, GENERATED, UNDER_REVIEW, CHANGES_REQUESTED, APPROVED, FINAL, SUPERSEDED
+  clauseVersions    String   // Comma-separated list of ClauseVersion IDs used
+  ruleVersions      String   // Information about rules applied
+  
+  pdfUrl            String?
+  docxUrl           String?
+  filePath          String?  // Storage path on disk (e.g. storage/documents/...)
+  fileSize          Int?     // Size in bytes
+  fileHash          String?  // SHA256 integrity hash
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([caseId])
+  @@index([status])
+}
+
+model LawyerReview {
+  id          String   @id @default(cuid())
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  lawyerId    String?
+  lawyer      User?    @relation("LawyerReviews", fields: [lawyerId], references: [id])
+  status      String   // e.g., REQUESTED, COMPLETED
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([caseId])
+  @@index([lawyerId])
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  caseId            String
+  case              Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  amount            Float
+  currency          String   @default("INR")
+  status            String   @default("PENDING") // PENDING, SUCCESS, FAILED
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  mode              String   @default("MOCK") // MOCK, RAZORPAY
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([caseId])
+  @@index([status])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String?
+  actor       User?    @relation(fields: [actorId], references: [id])
+  action      String
+  entity      String?  // e.g., Case, Document, User, Payment, Template
+  entityId    String?  // ID of the target entity
+  caseId      String?
+  case        Case?    @relation(fields: [caseId], references: [id])
+  metadata    String?  // JSON string
+  createdAt   DateTime @default(now())
+  timestamp   DateTime @default(now()) // alias for backwards compatibility
+
+  @@index([actorId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
