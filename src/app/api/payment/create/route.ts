@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { resolvePlanAmount, resolveTierKey } from "@/lib/payment";
+import Razorpay from "razorpay";
 
 export async function POST(req: Request) {
   try {
@@ -53,7 +54,19 @@ export async function POST(req: Request) {
 
     const resolvedTier = resolveTierKey(tier);
     const amount = resolvePlanAmount(tier || resolvedTier);
-    const mockOrderId = `mock_order_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+    // Initialize Razorpay
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID || "",
+      key_secret: process.env.RAZORPAY_KEY_SECRET || "",
+    });
+
+    // Create Razorpay Order
+    const razorpayOrder = await razorpay.orders.create({
+      amount: amount * 100, // Amount in paise
+      currency: "INR",
+      receipt: `receipt_${caseId}_${Date.now()}`,
+    });
 
     // Create PENDING payment record
     const payment = await prisma.payment.create({
@@ -62,8 +75,8 @@ export async function POST(req: Request) {
         amount,
         currency: "INR",
         status: "PENDING",
-        mode: "MOCK",
-        razorpayOrderId: mockOrderId,
+        mode: "RAZORPAY",
+        razorpayOrderId: razorpayOrder.id,
       },
     });
 
@@ -78,8 +91,8 @@ export async function POST(req: Request) {
         tier: resolvedTier,
         amount,
         currency: "INR",
-        orderId: mockOrderId,
-        mode: "MOCK",
+        orderId: razorpayOrder.id,
+        mode: "RAZORPAY",
       },
     });
 
@@ -89,7 +102,7 @@ export async function POST(req: Request) {
       currency: "INR",
       tier: resolvedTier,
       status: "PENDING",
-      orderId: mockOrderId,
+      orderId: razorpayOrder.id,
     });
   } catch (error) {
     console.error("Payment create error:", error);
