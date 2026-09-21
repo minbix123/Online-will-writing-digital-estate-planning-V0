@@ -41,7 +41,7 @@ interface Section {
   questions: Question[];
 }
 
-interface QuestionnaireEngineProps {
+export interface QuestionnaireEngineProps {
   caseId: string;
   initialAnswers?: Record<string, any>;
 }
