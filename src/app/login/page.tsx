@@ -107,6 +107,27 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+            
+            <div className="flex items-center justify-between mt-2">
+              <div className="flex items-center">
+                <input
+                  id="remember-me"
+                  name="remember-me"
+                  type="checkbox"
+                  defaultChecked
+                  className="h-4 w-4 rounded border-[#262626] bg-[#161616] text-[#d4a373] focus:ring-[#d4a373]"
+                />
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-[#a3a3a3]">
+                  Remember me
+                </label>
+              </div>
+
+              <div className="text-sm">
+                <Link href="/login/forgot-password" className="font-semibold text-[#d4a373] hover:text-[#c59b27] transition-colors">
+                  Forgot password?
+                </Link>
+              </div>
+            </div>
           </div>
 
           <div>
