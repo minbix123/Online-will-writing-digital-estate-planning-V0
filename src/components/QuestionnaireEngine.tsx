@@ -219,13 +219,11 @@ export default function QuestionnaireEngine({
     }
   };
 
-  const handleNext = async () => {
-    if (!currentSection || isFlushing) return;
+  const validateCurrentSection = (): boolean => {
+    if (!currentSection) return true;
 
-    // VALIDATE REQUIRED FIELDS
     const missingFields: string[] = [];
     currentSection.questions.forEach((q) => {
-      // Skip if conditions are not met
       if (!checkConditions(q.conditions)) return;
 
       if (q.type === "repeater") {
@@ -233,7 +231,6 @@ export default function QuestionnaireEngine({
         if (q.required && list.length === 0) {
            missingFields.push(q.label);
         } else if (list.length > 0) {
-           // Also validate repeater fields
            list.forEach((item: any, idx: number) => {
              q.fields?.forEach((f: QuestionField) => {
                if (f.required && (!item[f.id] || String(item[f.id]).trim() === "")) {
@@ -256,6 +253,17 @@ export default function QuestionnaireEngine({
       setSaveError(`Please fill out required fields (*). Missing: ${missingFields.join(", ")}`);
       setSaveStatus("error");
       window.scrollTo({ top: 0, behavior: "smooth" });
+      return false; // Invalid
+    }
+
+    setSaveError(null);
+    return true; // Valid
+  };
+
+  const handleNext = async () => {
+    if (!currentSection || isFlushing) return;
+
+    if (!validateCurrentSection()) {
       return; // BLOCK NAVIGATION
     }
 
@@ -385,17 +393,21 @@ export default function QuestionnaireEngine({
                 const isCurrent = idx === currentSectionIndex;
                 const isCompleted = idx < currentSectionIndex;
                 return (
-                  <button
-                    key={sec.id}
-                    type="button"
-                    onClick={async () => {
-                      if (currentSection && !isFlushing) {
-                        await flushPendingSave(currentSection.id);
-                        setCurrentSectionIndex(idx);
-                        window.scrollTo({ top: 0, behavior: "smooth" });
-                      }
-                    }}
-                    className={`px-3 py-1 rounded-full text-[11px] font-semibold transition shrink-0 ${
+                    <button
+                      key={sec.id}
+                      type="button"
+                      onClick={async () => {
+                        if (currentSection && !isFlushing) {
+                          // Allow navigating backwards without validation, but block navigating forwards/jumping if invalid
+                          if (idx > currentSectionIndex && !validateCurrentSection()) {
+                            return;
+                          }
+                          await flushPendingSave(currentSection.id);
+                          setCurrentSectionIndex(idx);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }
+                      }}
+                      className={`px-3 py-1 rounded-full text-[11px] font-semibold transition shrink-0 ${
                       isCurrent
                         ? "bg-[#d4a373] text-neutral-950 font-bold shadow-sm"
                         : isCompleted
